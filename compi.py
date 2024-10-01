@@ -30,10 +30,7 @@ def lexer(code):
             if match:
                 text = match.group(0)
                 if token_type != "ESPACIO":
-                    if tokens_found and tokens_found[-1][0] == token_type:
-                        tokens_found[-1] = (token_type, tokens_found[-1][1] + text)
-                    else:
-                        tokens_found.append((token_type, text))
+                    tokens_found.append((token_type, text))
                 position = match.end(0)
                 break
         
@@ -59,40 +56,62 @@ class Nodo:
             ret += hijo.__repr__(nivel + 1)
         return ret
 
-# Parser (muy básico)
+# Parser
 def parser(tokens):
-    if not tokens:
-        return None
-
     index = 0
 
     def parse_expresion():
         nonlocal index
-        nodo = Nodo("Expresión", "")
-        
-        while index < len(tokens):
-            token_type, token_value = tokens[index]
+        if index >= len(tokens):
+            return None
+        token_type, token_value = tokens[index]
 
-            if token_type == "IDENTIFICADOR" or token_type == "NUMERO":
-                hijo = Nodo(token_type, token_value)
-                nodo.agregar_hijo(hijo)
-                index += 1
-            elif token_type == "OPERADOR":
-                hijo = Nodo("Operador", token_value)
-                nodo.agregar_hijo(hijo)
-                index += 1
-            elif token_type == "DELIMITADOR":
-                if token_value in (';', '{', '}'):
-                    break
-                index += 1
-            else:
-                break
+        if token_type in ("IDENTIFICADOR", "NUMERO"):
+            nodo = Nodo(token_type, token_value)
+            index += 1
+            return nodo
+        elif token_type == "DELIMITADOR" and token_value == "(":
+            index += 1
+            nodo = parse_expresion()
+            if tokens[index][1] != ")":
+                raise SyntaxError("Se esperaba ')'")
+            index += 1
+            return nodo
+        return None
 
-        return nodo
+    def parse_asignacion():
+        nonlocal index
+        if tokens[index][0] == "IDENTIFICADOR":
+            nodo = Nodo("Asignación", tokens[index][1])
+            index += 1
+            if tokens[index][0] == "ASIGNACION":
+                index += 1
+                hijo_exp = parse_expresion()
+                nodo.agregar_hijo(hijo_exp)
+            return nodo
+        return None
 
     raiz = Nodo("Programa", "")
     while index < len(tokens):
-        raiz.agregar_hijo(parse_expresion())
+        if tokens[index][0] == "PALABRA_CLAVE":
+            nodo = Nodo("Declaración", tokens[index][1])
+            index += 1
+            if tokens[index][0] == "IDENTIFICADOR":
+                nodo.agregar_hijo(Nodo("IDENTIFICADOR", tokens[index][1]))
+                index += 1
+                if tokens[index][0] == "ASIGNACION":
+                    index += 1
+                    hijo_exp = parse_expresion()
+                    nodo.agregar_hijo(hijo_exp)
+            raiz.agregar_hijo(nodo)
+        elif tokens[index][0] == "IDENTIFICADOR":
+            nodo = parse_asignacion()
+            if nodo:
+                raiz.agregar_hijo(nodo)
+        elif tokens[index][0] == "DELIMITADOR" and tokens[index][1] == ";":
+            index += 1
+        else:
+            index += 1
 
     return raiz
 
